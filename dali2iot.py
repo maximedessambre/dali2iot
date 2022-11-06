@@ -21,6 +21,9 @@ DALI_DEVICE_LIGHT = 1
 
 
 class DaliDevice:
+    """
+    DaliDevice super class. Represent any dali devices
+    """
     def __init__(self, id: int, name: str, info: str, type: int = DALI_DEVICE_DEFAULT, features=None, scenes=None,
                  groups=None):
 
@@ -69,12 +72,20 @@ class DaliDevice:
 
 
 class DaliLight(DaliDevice):
-
+    """
+    Dali Light device
+    """
     def __init__(self, id: int, name: str, info: str):
         super().__init__(id, name, info, type=DALI_DEVICE_LIGHT)
 
 
 class DALI2IoT:
+    """
+    DALI2IoT API, allow to communicate with Lunatone DALI2IOT gateway device
+    Product link: https://www.lunatone.com/en/product/dali-2-iot-gateway/
+    API reference: https://www.lunatone.com/wp-content/uploads/2021/08/89453886_DALI2_IOT_API_Dokumentation_EN_M0023.pdf
+    """
+
     def __init__(self, host: str) -> None:
         self._host = host
         self._version = "0.0"
@@ -86,19 +97,46 @@ class DALI2IoT:
 
     @property
     def devices(self):
+        """
+        Return list of discovered DaliDevices
+        :return:
+        """
         return self._devices
 
     @property
     def status(self):
+        """
+        Return the API connection status
+        {
+            "status": int (required)
+            "error" : string - if status is set to DALI_ERROR, this fields contains the error message
+            "scan": dict (optional) - Scan status
+                    scan = {
+                        "id": "-1",
+                        "progress": 0,
+                        "found": 0,
+                        "status": "not started"
+                    }
+        }
+        :return:
+        """
         return self._status['status']
 
     async def connect(self):
+        """
+        Simulate connection to the gateway
+        Todo: verified supported version
+        """
         try:
             await self.is_dali()
         except requests.RequestException:
             self._status = {"status": DALI_ERROR, "error": "Connection issue"}
 
     async def is_dali(self) -> bool:
+        """
+        Verify if the endpoint is a DALI2IoT gateway
+        :return:
+        """
         req = requests.get(f"{self._host}/info")
         payload = req.json()
 
@@ -110,11 +148,15 @@ class DALI2IoT:
             self._status = {"status": DALI_CONNECTED, "error": ""}
             return True
         else:
-            self._status = {"status": DALI_ERROR, "error": "Not recognized DALI2IoT"}
+            self._status = {"status": DALI_ERROR, "error": "Not recognized DALI2IoT gateway"}
             return False
 
     # Can be async
     async def scan(self) -> None:
+        """
+        Start gateway scan. Once the scan is started; a thread is ran to monitor the scan progress
+        :return:
+        """
 
         if self.status != DALI_CONNECTED:
             logging.info("Not connected to DALI. Scan aborted")
@@ -147,6 +189,11 @@ class DALI2IoT:
 
     async def cancel_scan(self):
 
+        """
+        Cancel the  running scan
+        :return:
+        """
+
         self._status = {"status": DALI_SCANNING_STOP, "error": "", "scan": {
             "id": "-1",
             "progress": 0,
@@ -160,7 +207,10 @@ class DALI2IoT:
             self._status = {"status": DALI_ERROR, "error": "Error while cancelling scan"}
 
     def _refresh_scan_status(self) -> None:
-
+        """
+        Run in thread - pool the scan status each DALI_SCAN_INTERVAL sec
+        :return:
+        """
         while self.status == DALI_SCANNING and self._status['scan']['progress'] != 100:
 
             try:
@@ -181,7 +231,10 @@ class DALI2IoT:
             self._status = {"status": DALI_READY, "error": ""}
 
     async def get_devices(self) -> list[DaliDevice]:
-
+        """
+        Fetch the available devices on the DALI BUS
+        :return:
+        """
         # if not self._is_scanned:
         #    await self.scan()
 
@@ -195,7 +248,10 @@ class DALI2IoT:
             self._status = {"status": DALI_ERROR, "error": "Error while retreiving devices lists"}
 
     async def update_device(self, device: DaliDevice, features) -> DaliDevice:
-        """204 : Successful Response
+        """
+        Update a device state
+
+        204 : Successful Response
         422 : Validation Error
                 {
                 "detail": [
