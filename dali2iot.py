@@ -221,17 +221,17 @@ class DALI2IoT:
         :return:
         """
 
-        self._status = {"status": DALI_SCANNING_STOP, "error": "", "scan": {
+        self._set_status(DALI_SCANNING_STOP, {
             "id": "-1",
             "progress": 0,
             "found": 0,
             "status": "cancelled"
-        }}
+        })
 
         try:
-            req = requests.post(f"{self._host}/dali/scan/cancel")
+            req = requests.post(f"{self._url}/dali/scan/cancel")
         except requests.RequestException:
-            self._status = {"status": DALI_ERROR, "error": "Error while cancelling scan"}
+            self._set_status(DALI_ERROR, "Error while cancelling scan")
 
     def _refresh_scan_status(self) -> None:
         """
