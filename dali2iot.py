@@ -102,6 +102,7 @@ class DALI2IoT:
 
     def __init__(self, host: str, scheme: str = "http") -> None:
         self._host = host
+        self._scheme = scheme
         self._url = f"{scheme}://{host}"
         self._version = "0.0"
         self._devices: list[DaliDevice] = []
@@ -153,7 +154,7 @@ class DALI2IoT:
         elif status == DALI_SCANNING:
             self._status = {"status": DALI_SCANNING, "error": "", "scan": msg}
         else:
-            self._status = {"status": status, "error": "", "messqge": msg}
+            self._status = {"status": status, "error": "", "message": msg}
 
         logging.debug(f"Status changes from {prev} to {self._status}")
 
@@ -162,7 +163,7 @@ class DALI2IoT:
         Simulate connection to the gateway
         Todo: verified supported version
         """
-        is_dali, ret = await self.is_dali(self.host)
+        is_dali, ret = await self.is_dali(host=self.host, scheme=self._scheme)
         self._set_status(**ret['status'])
 
         if is_dali:
