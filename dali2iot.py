@@ -70,6 +70,12 @@ class DaliDevice:
     def features(self):
         return self._features
 
+    def update(self, kargs):
+        self._features.update(kargs)
+
+        # {"id": 6, "features": {"switchable": {"status": false}, "dimmable": {"status": 0.0}}}
+
+
 
 class DaliLight(DaliDevice):
     """
