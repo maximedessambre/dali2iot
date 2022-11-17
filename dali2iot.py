@@ -1,4 +1,4 @@
-import asyncio
+import websocket
 import requests
 import threading
 import logging
@@ -134,6 +134,19 @@ class DALI2IoT:
         :return:
         """
         return self._status['status']
+
+    def _set_status(self, status, msg=None):
+
+        prev = self._status
+
+        if status == DALI_ERROR:
+            self._status = {"status": DALI_ERROR, "error": msg}
+        elif status == DALI_SCANNING:
+            self._status = {"status": DALI_SCANNING, "error": "", "scan": msg}
+        else:
+            self._status = {"status": status, "error": "", "messqge": msg}
+
+        logger.debug(f"Status changes from {prev} to {self._status}")
 
     async def connect(self):
         """
