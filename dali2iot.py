@@ -102,10 +102,12 @@ class DALI2IoT:
 
     def __init__(self, host: str) -> None:
         self._host = host
+        self._url = f"{scheme}://{host}"
         self._version = "0.0"
         self._devices: list[DaliDevice] = []
         self._status = {"status": DALI_INIT, "error": ""}
-        # self._scanner: threading.Thread = None
+        self._ws: websocket.WebSocketApp = None
+        self._scanner: threading.Thread = None
 
         logging.debug(f"Init new DALI2IoT with host {host}")
 
