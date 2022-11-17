@@ -16,9 +16,9 @@ DALI_ERROR = -1
 
 DALI_SCAN_INTERVAL = 2
 
-DALI_DEVICE_DEFAULT = 0
-DALI_DEVICE_LIGHT = 1
-
+DALI_DEVICE_DEFAULT = "default"
+DALI_DEVICE_LIGHT = "switchable"
+DALI_DEVICE_LIGHT_DIM = "dimmable"
 
 class DaliDevice:
     """
