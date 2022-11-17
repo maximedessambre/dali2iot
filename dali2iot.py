@@ -163,29 +163,36 @@ class DALI2IoT:
         Simulate connection to the gateway
         Todo: verified supported version
         """
-        try:
-            await self.is_dali()
-        except requests.RequestException:
-            self._status = {"status": DALI_ERROR, "error": "Connection issue"}
+        is_dali, ret = await self.is_dali(self.host)
+        self._set_status(**ret['status'])
 
-    async def is_dali(self) -> bool:
+        if is_dali:
+            self._version = ret["version"]
+
+    @staticmethod
+    async def is_dali(host: str) -> tuple:
         """
         Verify if the endpoint is a DALI2IoT gateway
         :return:
         """
-        req = requests.get(f"{self._host}/info")
-        payload = req.json()
+        gw = {}
 
-        if "name" in payload and payload["name"] == "dali-iot":
-            # self._info = payload
-            self._version = payload["version"]
-            logging.info("Gateway info {}".format(payload))
+        try:
+            req = requests.get(f"{host}/info")
+            payload = req.json()
 
-            self._status = {"status": DALI_CONNECTED, "error": ""}
-            return True
-        else:
-            self._status = {"status": DALI_ERROR, "error": "Not recognized DALI2IoT gateway"}
-            return False
+            if "name" in payload and payload["name"] == "dali-iot":
+                # self._info = payload
+                gw.version = payload["version"]
+                gw.status = {"status": DALI_CONNECTED, "error": ""}
+                return True, gw
+
+            gw.status = {"status": DALI_ERROR, "error": "Not recognized DALI2IoT gateway"}
+
+        except requests.RequestException:
+            gw.status = {"status": DALI_ERROR, "error": "Connection issue"}
+
+        return False, gw
 
     # Can be async
     # Can be async
