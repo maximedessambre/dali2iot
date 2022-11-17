@@ -4,6 +4,7 @@ import threading
 import logging
 import sys
 import time
+import json
 
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
@@ -256,6 +257,66 @@ class DALI2IoT:
 
         if self.status == DALI_SCANNING and self._status['scan']['progress'] != 100:
             self._status = {"status": DALI_READY, "error": ""}
+
+    def _ws_on_open(self, ws):
+        logging.info("Websocket open")
+        pass
+
+    def _ws_on_message(self, ws, message):
+        """
+        # {"type": "devices", "data": {"devices": [{"id": 6, "features": {"switchable": {"status": false}, "dimmable": {"status": 0.0}}}]}, "timeSignature": {"timestamp": 1668027883.3452175, "counter": 5840}}
+
+        :param ws:
+        :param message:
+        :return:
+        """
+        logging.debug(f"Received {message}")
+
+        try:
+            message = json.loads(message)
+
+            if "type" in message and message["type"] == "devices":
+                for device in message["data"]["devices"]:
+                    logging.info(f"Devices update recieve for device {device['id']}")
+
+                    for d in self._devices:
+                        if d.id == device["id"]:
+                            d.update(device["features"])
+                            break
+                        else:
+                            logging.debug("New device discovered")
+
+
+        except Exception as e:
+            logging.critical(f"Error while parsing websocket message ({e})")
+
+    def _ws_on_error(self, ws, error):
+        logging.error(f"Websocket error {error}")
+
+    def _ws_on_close(self, ws, close_status_code, close_msg):
+        logging.info(f"Websocket closed (status={close_status_code},msg={close_msg})")
+        self._ws = None
+
+    def subscribe(self):
+
+        logging.debug(f"Subscribing to websocket ws://{self._host}")
+
+        def thread():
+            # websocket.enableTrace(True)
+            self._ws = websocket.WebSocketApp(f"ws://{self._host}",
+                                              on_open=self._ws_on_open,
+                                              on_message=self._ws_on_message,
+                                              on_error=self._ws_on_error,
+                                              on_close=self._ws_on_close)
+
+            self._ws.run_forever(
+                reconnect=5)  # Set dispatcher to automatic reconnection, 5 second reconnect delay if connection closed unexpectedly
+            logging.debug("Closing subscribe thread")
+
+        self._scanner = threading.Thread(target=thread)
+
+        logging.debug("Opening subscribe thread")
+        self._scanner.start()
 
     async def get_devices(self) -> list[DaliDevice]:
         """
