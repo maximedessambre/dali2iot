@@ -111,6 +111,12 @@ class DALI2IoT:
 
         logging.debug(f"Init new DALI2IoT with host {host}")
 
+    def bye(self):
+        logging.debug("Bye")
+        if self._ws is not None:
+            logging.debug("Closing websocket")
+            self._ws.close()
+
     @property
     def devices(self):
         """
