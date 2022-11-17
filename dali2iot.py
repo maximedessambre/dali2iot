@@ -27,7 +27,7 @@ class DaliDevice:
     DaliDevice super class. Represent any dali devices
     """
 
-    def __init__(self, id: int, name: str, info: str, type: int = DALI_DEVICE_DEFAULT, features=None, scenes=None,
+    def __init__(self, id: int, name: str, info: str, type: str = DALI_DEVICE_DEFAULT, features=None, scenes=None,
                  groups=None):
 
         if groups is None:
@@ -75,7 +75,6 @@ class DaliDevice:
 
     def update(self, kargs):
         self._features.update(kargs)
-
         # {"id": 6, "features": {"switchable": {"status": false}, "dimmable": {"status": 0.0}}}
 
 
@@ -84,7 +83,7 @@ class DaliLight(DaliDevice):
     Dali Light device
     """
 
-    def __init__(self, id: int, name: str, info: str, type: str, features=None,
+    def __init__(self, id: int, name: str, info: str, features=None,
                  scenes=None, groups=None):
         super().__init__(id=id, name=name, info=info, type=DALI_DEVICE_LIGHT, features=features, scenes=scenes,
                          groups=groups)
@@ -170,7 +169,7 @@ class DALI2IoT:
             self._version = ret["version"]
 
     @staticmethod
-    async def is_dali(host: str) -> tuple:
+    async def is_dali(host: str, scheme="http") -> tuple:
         """
         Verify if the endpoint is a DALI2IoT gateway
         :return:
@@ -178,19 +177,20 @@ class DALI2IoT:
         gw = {}
 
         try:
-            req = requests.get(f"{host}/info")
+            req = requests.get(f"{scheme}://{host}/info")
             payload = req.json()
+
+            logging.debug(f"is_dali status code {req.status_code}")
 
             if "name" in payload and payload["name"] == "dali-iot":
                 # self._info = payload
-                gw.version = payload["version"]
-                gw.status = {"status": DALI_CONNECTED, "error": ""}
+                gw = {"status": DALI_CONNECTED, "error": "", "version": payload["version"]}
                 return True, gw
 
-            gw.status = {"status": DALI_ERROR, "error": "Not recognized DALI2IoT gateway"}
+            gw = {"status": DALI_ERROR, "error": "Not recognized DALI2IoT gateway"}
 
         except requests.RequestException:
-            gw.status = {"status": DALI_ERROR, "error": "Connection issue"}
+            gw = {"status": DALI_ERROR, "error": "Connection issue"}
 
         return False, gw
 
