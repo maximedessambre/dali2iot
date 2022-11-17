@@ -100,12 +100,14 @@ class DALI2IoT:
     API reference: https://www.lunatone.com/wp-content/uploads/2021/08/89453886_DALI2_IOT_API_Dokumentation_EN_M0023.pdf
     """
 
-    def __init__(self, host: str) -> None:
+    def __init__(self, host: str, scheme: str = "http") -> None:
         self._host = host
+        self._url = f"{scheme}://{host}"
         self._version = "0.0"
         self._devices: list[DaliDevice] = []
         self._status = {"status": DALI_INIT, "error": ""}
-        # self._scanner: threading.Thread = None
+        self._ws: websocket.WebSocketApp = None
+        self._scanner: threading.Thread = None
 
         logging.debug(f"Init new DALI2IoT with host {host}")
 
