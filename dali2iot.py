@@ -83,7 +83,7 @@ class DaliLight(DaliDevice):
     Dali Light device
     """
 
-    def __init__(self, id: int, name: str, info: str, features=None,
+    def __init__(self, id: int, name: str, info: str, type: str, features=None,
                  scenes=None, groups=None):
         super().__init__(id=id, name=name, info=info, type=DALI_DEVICE_LIGHT, features=features, scenes=scenes,
                          groups=groups)
@@ -112,11 +112,17 @@ class DALI2IoT:
 
         logging.debug(f"Init new DALI2IoT with host {host}")
 
-    def bye(self):
-        logging.debug("Bye")
-        if self._ws is not None:
-            logging.debug("Closing websocket")
-            self._ws.close()
+    @property
+    def host(self):
+        return self._host
+
+    @property
+    def scheme(self):
+        return self._scheme
+
+    @property
+    def version(self):
+        return self._version
 
     @property
     def devices(self):
@@ -163,8 +169,8 @@ class DALI2IoT:
         Simulate connection to the gateway
         Todo: verified supported version
         """
-        is_dali, ret = await self.is_dali(host=self.host, scheme=self._scheme)
-        self._set_status(**ret['status'])
+        is_dali, ret = await self.is_dali(host=self.host, scheme=self.scheme)
+        self._set_status(ret['status'], ret['error'])
 
         if is_dali:
             self._version = ret["version"]
@@ -262,18 +268,18 @@ class DALI2IoT:
                 scan_status = requests.get(f"{self._host}/dali/scan", )
 
                 if scan_status.status_code == 200:
-                    self._status = {"status": DALI_SCANNING, "error": "", "scan": scan_status.json()}
+                    self._set_status(DALI_SCANNING, scan_status.json())
                     logging.info("Scan progress {}".format(self._status['scan']['progress']))
                     time.sleep(DALI_SCAN_INTERVAL)
                     # await asyncio.sleep(DALI_SCAN_INTERVAL)
                 else:
-                    self._status = {"status": DALI_ERROR, "error": scan_status.text}
+                    self._set_status(DALI_ERROR, scan_status.text)
 
             except requests.RequestException:
-                self._status = {"status": DALI_ERROR, "error": "Error while scanning"}
+                self._set_status(DALI_ERROR, "Error while scanning")
 
         if self.status == DALI_SCANNING and self._status['scan']['progress'] != 100:
-            self._status = {"status": DALI_READY, "error": ""}
+            self._set_status(DALI_READY)
 
     def _ws_on_open(self, ws):
         logging.info("Websocket open")
@@ -300,9 +306,6 @@ class DALI2IoT:
                         if d.id == device["id"]:
                             d.update(device["features"])
                             break
-                        else:
-                            logging.debug("New device discovered")
-
 
         except Exception as e:
             logging.critical(f"Error while parsing websocket message ({e})")
@@ -385,10 +388,14 @@ class DALI2IoT:
         except requests.RequestException as e:
             logging.error(f"Error while updating device: {e}")
 
-    async def turn_on(self, device: DaliDevice) -> DaliDevice:
-        device = await self.update_device(device=device, features={"switchable": True})
-        return device
+    async def turn_on(self, device: DaliDevice) :
+        await self.update_device(device=device, features={"switchable": True})
 
-    async def turn_off(self, device: DaliDevice) -> DaliDevice:
-        device = await self.update_device(device=device, features={"switchable": False})
-        return device
+    async def turn_off(self, device: DaliDevice):
+        await self.update_device(device=device, features={"switchable": False})
+
+    def bye(self):
+        logging.debug("Bye")
+        if self._ws is not None:
+            logging.debug("Closing websocket")
+            self._ws.close()
