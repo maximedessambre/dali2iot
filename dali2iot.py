@@ -146,7 +146,7 @@ class DALI2IoT:
         else:
             self._status = {"status": status, "error": "", "messqge": msg}
 
-        logger.debug(f"Status changes from {prev} to {self._status}")
+        logging.debug(f"Status changes from {prev} to {self._status}")
 
     async def connect(self):
         """
@@ -178,9 +178,10 @@ class DALI2IoT:
             return False
 
     # Can be async
+    # Can be async
     async def scan(self) -> None:
         """
-        Start gateway scan. Once the scan is started; a thread is ran to monitor the scan progress
+        Start gateway scan. Once the scan is started; a thread is running to monitor the scan progress
         :return:
         """
 
@@ -196,22 +197,22 @@ class DALI2IoT:
                 "status": "not started"
             }
 
-            self._status = {"status": DALI_SCANNING, "error": "", "scan": scan}
+            self._set_status(DALI_SCANNING, scan)
 
             try:
                 data = {"newInstallation": False, "noAddressing": False}
-                scan_status = requests.post(f"{self._host}/dali/scan", json=data)
+                scan_status = requests.post(f"{self._url}/dali/scan", json=data)
 
                 if scan_status.status_code == 200:
-                    self._status = {"status": DALI_SCANNING, "error": "", "scan": scan_status.json()}
+                    self._set_status(DALI_SCANNING, scan_status.json())
                 else:
-                    self._status = {"status": DALI_ERROR, "error": scan_status.text}
+                    self._set_status(DALI_ERROR, scan_status.text)
 
-                self._scanner = threading.Thread(target=self._refresh_scan_status)
-                self._scanner.start()
+                # self._scanner = threading.Thread(target=self._refresh_scan_status)
+                # self._scanner.start()
 
             except requests.RequestException:
-                self._status = {"status": DALI_ERROR, "error": "Error while scanning"}
+                self._set_status(DALI_ERROR, "Error while scanning")
 
     async def cancel_scan(self):
 
