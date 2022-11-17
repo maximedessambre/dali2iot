@@ -21,10 +21,12 @@ DALI_DEVICE_DEFAULT = "default"
 DALI_DEVICE_LIGHT = "switchable"
 DALI_DEVICE_LIGHT_DIM = "dimmable"
 
+
 class DaliDevice:
     """
     DaliDevice super class. Represent any dali devices
     """
+
     def __init__(self, id: int, name: str, info: str, type: int = DALI_DEVICE_DEFAULT, features=None, scenes=None,
                  groups=None):
 
@@ -75,7 +77,6 @@ class DaliDevice:
         self._features.update(kargs)
 
         # {"id": 6, "features": {"switchable": {"status": false}, "dimmable": {"status": 0.0}}}
-
 
 
 class DaliLight(DaliDevice):
@@ -326,7 +327,7 @@ class DALI2IoT:
         logging.debug("Opening subscribe thread")
         self._scanner.start()
 
-    async def get_devices(self) -> list[DaliDevice]:
+    async def get_devices(self):
         """
         Fetch the available devices on the DALI BUS
         :return:
@@ -335,15 +336,19 @@ class DALI2IoT:
         #    await self.scan()
 
         try:
-            req = requests.get(f"{self._host}/devices")
+            req = requests.get(f"{self._url}/devices")
             payload = req.json()
-            logging.debug(payload)
-            self._devices = [DaliDevice(**device) for device in payload["devices"]]
+
+            for device in payload['devices']:
+                if "switchable" in device['features']:
+                    self._devices.append(DaliLight(**device))
+                else:
+                    self._devices.append(DaliDevice(**device))
 
         except requests.RequestException:
-            self._status = {"status": DALI_ERROR, "error": "Error while retreiving devices lists"}
+            self._status = {"status": DALI_ERROR, "error": "Error while retrieving devices lists"}
 
-    async def update_device(self, device: DaliDevice, features) -> DaliDevice:
+    async def update_device(self, device: DaliDevice, features):
         """
         Update a device state
 
@@ -361,10 +366,16 @@ class DALI2IoT:
                 ]
                 }
         """
-        req = requests.post(f"{self._host}/device/{device.id}/control", json=features)
+        logging.info(f"Changing device {device.id} features from {device.features} to {features}")
 
-        device.features.update(features)
-        return device
+        try:
+            req = requests.post(f"{self._url}/device/{device.id}/control", json=features)
+
+            if not req.ok:
+                logging.warning(f"Error while updating device {req.status_code} {req.text}")
+
+        except requests.RequestException as e:
+            logging.error(f"Error while updating device: {e}")
 
     async def turn_on(self, device: DaliDevice) -> DaliDevice:
         device = await self.update_device(device=device, features={"switchable": True})
