@@ -1,12 +1,13 @@
 import websocket
 import requests
 import threading
-import logging
-import sys
 import time
 import json
 
-logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+from .logger import logger
+from src.dali_device import DaliDevice
+from src.dali_light import DaliLight
+
 
 DALI_INIT = 0
 DALI_CONNECTED = 1
@@ -17,103 +18,6 @@ DALI_ERROR = -1
 
 DALI_SCAN_INTERVAL = 2
 
-DALI_DEVICE_DEFAULT = "default"
-DALI_DEVICE_LIGHT = "switchable"
-DALI_DEVICE_LIGHT_DIM = "dimmable"
-
-
-class DaliDevice:
-    """
-    DaliDevice super class. Represent any dali devices
-    """
-
-    def __init__(
-        self,
-        id: int,
-        name: str,
-        info: str,
-        type: str = DALI_DEVICE_DEFAULT,
-        features=None,
-        scenes=None,
-        groups=None,
-    ):
-
-        if groups is None:
-            groups = []
-        if scenes is None:
-            scenes = []
-        if features is None:
-            features = {}
-
-        self._id = id
-        self._name = name
-        self._info = info
-        self._type = type
-        self._features = features
-        self._scenes = scenes
-        self._groups = groups
-
-        logging.debug(f"New device added, id:{id}, name:{name}")
-
-    def __repr__(self):
-        return f"Dali device {self.name} ({self.id})"
-
-    def __str__(self):
-        return f"{self.name} ({self.id})"
-
-    @property
-    def id(self):
-        return self._id
-
-    @property
-    def name(self):
-        return self._name
-
-    @property
-    def info(self):
-        return self._info
-
-    @property
-    def type(self):
-        return self._type
-
-    @property
-    def features(self):
-        return self._features
-
-    def update(self, kargs):
-        self._features.update(kargs)
-        # {"id": 6, "features": {"switchable": {"status": false}, "dimmable": {"status": 0.0}}}
-
-
-class DaliLight(DaliDevice):
-    """
-    Dali Light device
-    """
-
-    def __init__(
-        self,
-        id: int,
-        name: str,
-        info: str,
-        type: str,
-        features=None,
-        scenes=None,
-        groups=None,
-    ):
-        super().__init__(
-            id=id,
-            name=name,
-            info=info,
-            type=DALI_DEVICE_LIGHT,
-            features=features,
-            scenes=scenes,
-            groups=groups,
-        )
-
-    @property
-    def is_on(self) -> bool:
-        return self.features["switchable"]["status"]
 
 
 class DALI2IoT:
@@ -133,7 +37,7 @@ class DALI2IoT:
         self._ws: websocket.WebSocketApp = None
         self._scanner: threading.Thread = None
 
-        logging.debug(f"Init new DALI2IoT with host {host}")
+        logger.debug(f"Init new DALI2IoT with host {host}")
 
     @property
     def host(self):
@@ -185,7 +89,7 @@ class DALI2IoT:
         else:
             self._status = {"status": status, "error": "", "message": msg}
 
-        logging.debug(f"Status changes from {prev} to {self._status}")
+        logger.debug(f"Status changes from {prev} to {self._status}")
 
     async def connect(self):
         """
@@ -210,7 +114,7 @@ class DALI2IoT:
             req = requests.get(f"{scheme}://{host}/info")
             payload = req.json()
 
-            logging.debug(f"is_dali status code {req.status_code}")
+            logger.debug(f"is_dali status code {req.status_code}")
 
             if "name" in payload and payload["name"] == "dali-iot":
                 # self._info = payload
@@ -237,9 +141,9 @@ class DALI2IoT:
         """
 
         if self.status != DALI_CONNECTED:
-            logging.info("Not connected to DALI. Scan aborted")
+            logger.info("Not connected to DALI. Scan aborted")
         elif self.status != DALI_SCANNING:
-            logging.info("Scan started")
+            logger.info("Scan started")
 
             scan = {"id": "-1", "progress": 0, "found": 0, "status": "not started"}
 
@@ -291,7 +195,7 @@ class DALI2IoT:
 
                 if scan_status.status_code == 200:
                     self._set_status(DALI_SCANNING, scan_status.json())
-                    logging.info(
+                    logger.info(
                         "Scan progress {}".format(self._status["scan"]["progress"])
                     )
                     time.sleep(DALI_SCAN_INTERVAL)
@@ -306,7 +210,7 @@ class DALI2IoT:
             self._set_status(DALI_READY)
 
     def _ws_on_open(self, ws):
-        logging.info("Websocket open")
+        logger.info("Websocket open")
         pass
 
     def _ws_on_message(self, ws, message):
@@ -318,14 +222,14 @@ class DALI2IoT:
         :param message:
         :return:
         """
-        logging.debug(f"Received {message}")
+        logger.debug(f"Received {message}")
 
         try:
             message = json.loads(message)
 
             if "type" in message and message["type"] == "devices":
                 for device in message["data"]["devices"]:
-                    logging.info(f"Devices update receive for device {device['id']}")
+                    logger.info(f"Devices update receive for device {device['id']}")
 
                     for d in self._devices:
                         if d.id == device["id"]:
@@ -333,18 +237,18 @@ class DALI2IoT:
                             break
 
         except Exception as e:
-            logging.critical(f"Error while parsing websocket message ({e})")
+            logger.critical(f"Error while parsing websocket message ({e})")
 
     def _ws_on_error(self, ws, error):
-        logging.error(f"Websocket error {error}")
+        logger.error(f"Websocket error {error}")
 
     def _ws_on_close(self, ws, close_status_code, close_msg):
-        logging.info(f"Websocket closed (status={close_status_code},msg={close_msg})")
+        logger.info(f"Websocket closed (status={close_status_code},msg={close_msg})")
         self._ws = None
 
     def subscribe(self):
 
-        logging.debug(f"Subscribing to websocket ws://{self._host}")
+        logger.debug(f"Subscribing to websocket ws://{self._host}")
 
         def thread():
             # websocket.enableTrace(True)
@@ -360,11 +264,11 @@ class DALI2IoT:
                 reconnect=5
             )  # Set dispatcher to automatic reconnection, 5-second reconnect delay if connection
             # closed unexpectedly
-            logging.debug("Closing subscribe thread")
+            logger.debug("Closing subscribe thread")
 
         self._scanner = threading.Thread(target=thread)
 
-        logging.debug("Opening subscribe thread")
+        logger.debug("Opening subscribe thread")
         self._scanner.start()
 
     async def get_devices(self):
@@ -409,7 +313,7 @@ class DALI2IoT:
                 ]
                 }
         """
-        logging.info(
+        logger.info(
             f"Changing device {device.id} features from {device.features} to {features}"
         )
 
@@ -419,12 +323,12 @@ class DALI2IoT:
             )
 
             if not req.ok:
-                logging.warning(
+                logger.warning(
                     f"Error while updating device {req.status_code} {req.text}"
                 )
 
         except requests.RequestException as e:
-            logging.error(f"Error while updating device: {e}")
+            logger.error(f"Error while updating device: {e}")
 
     async def turn_on(self, device: DaliDevice):
         await self.update_device(device=device, features={"switchable": True})
@@ -433,7 +337,7 @@ class DALI2IoT:
         await self.update_device(device=device, features={"switchable": False})
 
     def bye(self):
-        logging.debug("Bye")
+        logger.debug("Bye")
         if self._ws is not None:
-            logging.debug("Closing websocket")
+            logger.debug("Closing websocket")
             self._ws.close()
