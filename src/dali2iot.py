@@ -203,33 +203,29 @@ class DALI2IoT:
         except requests.RequestException:
             self._set_status(DALI_ERROR, "Error while cancelling scan")
 
-    def _refresh_scan_status(self) -> None:
+    def get_scan_status(self) -> None:
         """
         Run in thread - pool the scan status each DALI_SCAN_INTERVAL sec
         :return:
         """
-        while self.status == DALI_SCANNING and self._status["scan"]["progress"] != 100:
 
-            try:
-                scan_status = requests.get(
-                    f"{self._host}/dali/scan",
-                )
+        try:
+            scan_status = requests.get(
+                f"{self._host}/dali/scan",
+            )
 
-                if scan_status.status_code == 200:
-                    self._set_status(DALI_SCANNING, scan_status.json())
-                    logger.info(
-                        "Scan progress {}".format(self._status["scan"]["progress"])
-                    )
-                    time.sleep(DALI_SCAN_INTERVAL)
-                    # await asyncio.sleep(DALI_SCAN_INTERVAL)
-                else:
-                    self._set_status(DALI_ERROR, scan_status.text)
+            if scan_status.status_code == 200:
+                self._set_status(DALI_SCANNING, scan_status.json())
+                logger.info("Scan progress {}".format(self._status["scan"]["progress"]))
+            else:
+                self._set_status(DALI_ERROR, scan_status.text)
 
-            except requests.RequestException:
-                self._set_status(DALI_ERROR, "Error while scanning")
-
-        if self.status == DALI_SCANNING and self._status["scan"]["progress"] != 100:
-            self._set_status(DALI_READY)
+        except requests.RequestException as e:
+            logger.debug(e)
+            self._set_status(DALI_ERROR, "Error while scanning")
+        finally:
+            if self.status == DALI_SCANNING and self._status["scan"]["progress"] == 100:
+                self._set_status(DALI_READY)
 
     def _ws_on_open(self, ws):
         logger.info("Websocket open")
