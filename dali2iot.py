@@ -27,8 +27,16 @@ class DaliDevice:
     DaliDevice super class. Represent any dali devices
     """
 
-    def __init__(self, id: int, name: str, info: str, type: str = DALI_DEVICE_DEFAULT, features=None, scenes=None,
-                 groups=None):
+    def __init__(
+        self,
+        id: int,
+        name: str,
+        info: str,
+        type: str = DALI_DEVICE_DEFAULT,
+        features=None,
+        scenes=None,
+        groups=None,
+    ):
 
         if groups is None:
             groups = []
@@ -83,14 +91,29 @@ class DaliLight(DaliDevice):
     Dali Light device
     """
 
-    def __init__(self, id: int, name: str, info: str, type: str, features=None,
-                 scenes=None, groups=None):
-        super().__init__(id=id, name=name, info=info, type=DALI_DEVICE_LIGHT, features=features, scenes=scenes,
-                         groups=groups)
+    def __init__(
+        self,
+        id: int,
+        name: str,
+        info: str,
+        type: str,
+        features=None,
+        scenes=None,
+        groups=None,
+    ):
+        super().__init__(
+            id=id,
+            name=name,
+            info=info,
+            type=DALI_DEVICE_LIGHT,
+            features=features,
+            scenes=scenes,
+            groups=groups,
+        )
 
     @property
     def is_on(self) -> bool:
-        return self.features['switchable']['status']
+        return self.features["switchable"]["status"]
 
 
 class DALI2IoT:
@@ -149,7 +172,7 @@ class DALI2IoT:
         }
         :return:
         """
-        return self._status['status']
+        return self._status["status"]
 
     def _set_status(self, status, msg=None):
 
@@ -170,7 +193,7 @@ class DALI2IoT:
         Todo: verified supported version
         """
         is_dali, ret = await self.is_dali(host=self.host, scheme=self.scheme)
-        self._set_status(ret['status'], ret['error'])
+        self._set_status(ret["status"], ret["error"])
 
         if is_dali:
             self._version = ret["version"]
@@ -191,7 +214,11 @@ class DALI2IoT:
 
             if "name" in payload and payload["name"] == "dali-iot":
                 # self._info = payload
-                gw = {"status": DALI_CONNECTED, "error": "", "version": payload["version"]}
+                gw = {
+                    "status": DALI_CONNECTED,
+                    "error": "",
+                    "version": payload["version"],
+                }
                 return True, gw
 
             gw = {"status": DALI_ERROR, "error": "Not recognized DALI2IoT gateway"}
@@ -214,12 +241,7 @@ class DALI2IoT:
         elif self.status != DALI_SCANNING:
             logging.info("Scan started")
 
-            scan = {
-                "id": "-1",
-                "progress": 0,
-                "found": 0,
-                "status": "not started"
-            }
+            scan = {"id": "-1", "progress": 0, "found": 0, "status": "not started"}
 
             self._set_status(DALI_SCANNING, scan)
 
@@ -245,12 +267,10 @@ class DALI2IoT:
         :return:
         """
 
-        self._set_status(DALI_SCANNING_STOP, {
-            "id": "-1",
-            "progress": 0,
-            "found": 0,
-            "status": "cancelled"
-        })
+        self._set_status(
+            DALI_SCANNING_STOP,
+            {"id": "-1", "progress": 0, "found": 0, "status": "cancelled"},
+        )
 
         try:
             req = requests.post(f"{self._url}/dali/scan/cancel")
@@ -262,14 +282,18 @@ class DALI2IoT:
         Run in thread - pool the scan status each DALI_SCAN_INTERVAL sec
         :return:
         """
-        while self.status == DALI_SCANNING and self._status['scan']['progress'] != 100:
+        while self.status == DALI_SCANNING and self._status["scan"]["progress"] != 100:
 
             try:
-                scan_status = requests.get(f"{self._host}/dali/scan", )
+                scan_status = requests.get(
+                    f"{self._host}/dali/scan",
+                )
 
                 if scan_status.status_code == 200:
                     self._set_status(DALI_SCANNING, scan_status.json())
-                    logging.info("Scan progress {}".format(self._status['scan']['progress']))
+                    logging.info(
+                        "Scan progress {}".format(self._status["scan"]["progress"])
+                    )
                     time.sleep(DALI_SCAN_INTERVAL)
                     # await asyncio.sleep(DALI_SCAN_INTERVAL)
                 else:
@@ -278,7 +302,7 @@ class DALI2IoT:
             except requests.RequestException:
                 self._set_status(DALI_ERROR, "Error while scanning")
 
-        if self.status == DALI_SCANNING and self._status['scan']['progress'] != 100:
+        if self.status == DALI_SCANNING and self._status["scan"]["progress"] != 100:
             self._set_status(DALI_READY)
 
     def _ws_on_open(self, ws):
@@ -287,7 +311,8 @@ class DALI2IoT:
 
     def _ws_on_message(self, ws, message):
         """
-        # {"type": "devices", "data": {"devices": [{"id": 6, "features": {"switchable": {"status": false}, "dimmable": {"status": 0.0}}}]}, "timeSignature": {"timestamp": 1668027883.3452175, "counter": 5840}}
+        # {"type": "devices", "data": {"devices": [{"id": 6, "features": {"switchable": {"status": false},
+        "dimmable": {"status": 0.0}}}]}, "timeSignature": {"timestamp": 1668027883.3452175, "counter": 5840}}
 
         :param ws:
         :param message:
@@ -300,7 +325,7 @@ class DALI2IoT:
 
             if "type" in message and message["type"] == "devices":
                 for device in message["data"]["devices"]:
-                    logging.info(f"Devices update recieve for device {device['id']}")
+                    logging.info(f"Devices update receive for device {device['id']}")
 
                     for d in self._devices:
                         if d.id == device["id"]:
@@ -323,14 +348,18 @@ class DALI2IoT:
 
         def thread():
             # websocket.enableTrace(True)
-            self._ws = websocket.WebSocketApp(f"ws://{self._host}",
-                                              on_open=self._ws_on_open,
-                                              on_message=self._ws_on_message,
-                                              on_error=self._ws_on_error,
-                                              on_close=self._ws_on_close)
+            self._ws = websocket.WebSocketApp(
+                f"ws://{self._host}",
+                on_open=self._ws_on_open,
+                on_message=self._ws_on_message,
+                on_error=self._ws_on_error,
+                on_close=self._ws_on_close,
+            )
 
             self._ws.run_forever(
-                reconnect=5)  # Set dispatcher to automatic reconnection, 5 second reconnect delay if connection closed unexpectedly
+                reconnect=5
+            )  # Set dispatcher to automatic reconnection, 5-second reconnect delay if connection
+            # closed unexpectedly
             logging.debug("Closing subscribe thread")
 
         self._scanner = threading.Thread(target=thread)
@@ -350,14 +379,17 @@ class DALI2IoT:
             req = requests.get(f"{self._url}/devices")
             payload = req.json()
 
-            for device in payload['devices']:
-                if "switchable" in device['features']:
+            for device in payload["devices"]:
+                if "switchable" in device["features"]:
                     self._devices.append(DaliLight(**device))
                 else:
                     self._devices.append(DaliDevice(**device))
 
         except requests.RequestException:
-            self._status = {"status": DALI_ERROR, "error": "Error while retrieving devices lists"}
+            self._status = {
+                "status": DALI_ERROR,
+                "error": "Error while retrieving devices lists",
+            }
 
     async def update_device(self, device: DaliDevice, features):
         """
@@ -377,18 +409,24 @@ class DALI2IoT:
                 ]
                 }
         """
-        logging.info(f"Changing device {device.id} features from {device.features} to {features}")
+        logging.info(
+            f"Changing device {device.id} features from {device.features} to {features}"
+        )
 
         try:
-            req = requests.post(f"{self._url}/device/{device.id}/control", json=features)
+            req = requests.post(
+                f"{self._url}/device/{device.id}/control", json=features
+            )
 
             if not req.ok:
-                logging.warning(f"Error while updating device {req.status_code} {req.text}")
+                logging.warning(
+                    f"Error while updating device {req.status_code} {req.text}"
+                )
 
         except requests.RequestException as e:
             logging.error(f"Error while updating device: {e}")
 
-    async def turn_on(self, device: DaliDevice) :
+    async def turn_on(self, device: DaliDevice):
         await self.update_device(device=device, features={"switchable": True})
 
     async def turn_off(self, device: DaliDevice):
