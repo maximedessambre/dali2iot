@@ -7,7 +7,8 @@ DEVICES_LIST = 3
 MONITORING = 4
 DEVICES_PRINT = 5
 TOGGLE_LIGHT = 6
-EXIT_CODE=9
+EXIT_CODE = 9
+
 
 def menu():
     opts = [CONNECT, SCAN, DEVICES_LIST, MONITORING, TOGGLE_LIGHT, EXIT_CODE]
@@ -29,7 +30,8 @@ def menu():
 
     return s
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
 
     host = "10.0.30.16"
 
@@ -53,7 +55,7 @@ if __name__ == '__main__':
         elif s == DEVICES_LIST:
             asyncio.run(d2i.get_devices())
         elif s == MONITORING:
-            d2i.subscribe()
+            d2i.monitor()
         elif s == DEVICES_LIST or s == TOGGLE_LIGHT:
 
             for device in d2i.devices:
