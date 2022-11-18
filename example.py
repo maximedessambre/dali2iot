@@ -1,4 +1,4 @@
-import dali2iot
+from src import dali2iot
 import asyncio
 
 CONNECT = 1
@@ -33,7 +33,7 @@ if __name__ == '__main__':
 
     host = "10.0.30.16"
 
-    is_dali, ret = await dali2iot.DALI2IoT.is_dali(host=host)
+    is_dali, ret = asyncio.run(dali2iot.DALI2IoT.is_dali(host=host))
 
     if not is_dali:
         print(f"{host} is not a recognized DALI2IoT Gateway")
