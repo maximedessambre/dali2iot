@@ -3,6 +3,8 @@
 Async python library to control your Lunatone DALi2IoT gateway
 Works with https://www.lunatone.com/en/product/dali-2-iot-gateway/ 
 
+This version use aiohttp as backend for REST call instead of request
+
 ## Installation
 
 To be published to PyPI. Working on it :)
@@ -52,7 +54,7 @@ asyncio.run(d2i.get_devices())
 d2i.monitor()
 ```
 
-The monitoring thread open a websocket to the gateway and listen to incoming messages.
+Start a websocket to the gateway and listen to incoming messages.
 When a device state change is receive, the corresponding DaliDevice get their status updated to reflect the current state of the device
 
 #### Example 
