@@ -3,7 +3,11 @@
 Async python library to control your Lunatone DALi2IoT gateway
 Works with https://www.lunatone.com/en/product/dali-2-iot-gateway/ 
 
-## How it works
+## Installation
+
+To be published to PyPI. Working on it :)
+
+## Usage
 
 The d2i object is using an internal FSM thanks to the "status" property. Each state is defined with a constant
 
