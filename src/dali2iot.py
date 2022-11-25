@@ -1,10 +1,7 @@
 import json
-import asyncio
 import aiohttp
 
 from .logger import logger
-from src.dali_device import DaliDevice
-from src.dali_light import DaliLight
 
 DALI_INIT = 0
 DALI_CONNECTED = 1
@@ -15,8 +12,114 @@ DALI_ERROR = -1
 
 DALI_SCAN_INTERVAL = 2
 
+DALI_DEVICE_DEFAULT = "default"
+DALI_DEVICE_LIGHT = "switchable"
+DALI_DEVICE_LIGHT_DIM = "dimmable"
 
-class DALI2IoT:
+
+class DaliDevice:
+    """
+    DaliDevice super class. Represent any dali devices
+    Structure from the gateway
+    {
+      "id": 1,
+      "name": "Dali #0 Line 0",
+      "info": "Dali #0 Line 0",
+      "type": "default",
+      "features": {
+        "switchable": {
+          "status": false
+        },
+        "dimmable": {
+          "status": 0
+        },
+        "scene": true,
+        "colorRGB": {
+          "status": {
+            "r": 1,
+            "g": 1,
+            "b": 1
+          }
+        },
+        "colorKelvin": {
+          "status": 2700
+        },
+        "colorXY": {
+          "status": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        "saveToScene": true,
+        "gotoLastActive": {}
+      },
+      "scenes": [],
+      "groups": []
+    }
+    """
+
+    def __init__(
+        self,
+        id: int,
+        name: str,
+        info: str,
+        type: str = DALI_DEVICE_DEFAULT,
+        features: object = None,
+        scenes: object = None,
+        groups: object = None,
+    ):
+
+        if groups is None:
+            groups = []
+        if scenes is None:
+            scenes = []
+        if features is None:
+            features = {}
+
+        self._id = id
+        self._name = name
+        self._info = info
+        self._type = type
+        self._features = features
+        self._scenes = scenes
+        self._groups = groups
+
+    def __repr__(self):
+        return f"Dali device {self.name} ({self.id})"
+
+    def __str__(self):
+        return f"{self.name} ({self.id})"
+
+    @property
+    def id(self):
+        return self._id
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def info(self):
+        return self._info
+
+    @property
+    def type(self):
+        return self._type
+
+    @property
+    def features(self):
+        return self._features
+
+    @property
+    def switchable(self):
+        return self._features["switchable"]["status"]
+
+    def update(self, kargs):
+        self._features.update(kargs)
+        # {"id": 6, "features": {"switchable": {"status": false}, "dimmable": {"status": 0.0}}}
+
+
+class DaliGateway:
     """
     DALI2IoT API, allow to communicate with Lunatone DALI2IOT gateway device
     Product link: https://www.lunatone.com/en/product/dali-2-iot-gateway/
@@ -26,6 +129,10 @@ class DALI2IoT:
     def __init__(self, host: str, ssl: bool = False):
         self._host = host
         self._ssl = ssl
+
+        if ssl:
+            logger.info("SSL not yet supported")
+
         self._version = "0.0"
         self._devices: list[DaliDevice] = []
         self._status = DALI_INIT
@@ -74,7 +181,7 @@ class DALI2IoT:
             data = {}
 
         scheme = "http"
-        if self.ssl:
+        if self._ssl:
             scheme = "https"
 
         async with aiohttp.ClientSession() as session:
@@ -152,7 +259,7 @@ class DALI2IoT:
 
             try:
                 data = {"newInstallation": False, "noAddressing": False}
-                ok, response = self._post("/dali/scan", data=data)
+                ok, response = await self._post("/dali/scan", data=data)
 
                 if ok:
                     self._scanner = response
@@ -186,7 +293,7 @@ class DALI2IoT:
             except aiohttp.ClientConnectorError as client_conn_err:
                 self.error = f"Error while cancelling BUS scan ({client_conn_err})"
 
-    def get_scan_status(self) -> None:
+    async def get_scan_status(self) -> None:
         """
         Run in thread - pool the scan status each DALI_SCAN_INTERVAL sec
         :return:
@@ -202,18 +309,14 @@ class DALI2IoT:
                 if "progress" in response:
                     logger.info("Scan progress {}".format(self._scanner["progress"]))
                     if response["progress"] == "100":
-                        self.status = DALI_READY
+                        self._status = DALI_READY
             else:
                 self.error = response
 
         except aiohttp.ClientConnectorError as client_conn_err:
             self.error = f"Error while getting BUS scan status ({client_conn_err})"
 
-    def _ws_on_open(self, ws):
-        logger.info("Websocket open")
-        pass
-
-    def _ws_on_message(self, ws, message: str):
+    def _ws_on_message(self, message: aiohttp.WSMessage):
         """
 
         # {"type": "devices", "data": {"devices": [{"id": 6, "features": {"switchable": {"status": false},
@@ -226,33 +329,59 @@ class DALI2IoT:
         logger.debug(f"Received {message}")
 
         try:
-            message = json.loads(message)
+            message = json.loads(message.data)
 
-            if "type" in message and message["type"] == "devices":
-                for device in message["data"]["devices"]:
-                    logger.info(f"Devices update receive for device {device['id']}")
+            if "type" not in message:
+                logger.debug("Not a DALI type message")
+                return
 
-                    for d in self._devices:
-                        if d.id == device["id"]:
-                            d.update(device["features"])
-                            break
+            if message["type"] == "devices":
+                self._on_device_update(message["data"])
+            elif message["type"] == "scanProgress":
+                self._on_scan_progress(message["data"])
+
         except Exception as e:
             logger.critical(f"Error while parsing websocket message ({e})")
 
-    def _ws_on_error(self, ws, error):
-        logger.error(f"Websocket error {error}")
+    def _on_device_update(self, message: str):
 
-    def _ws_on_close(self, ws, close_status_code, close_msg):
-        logger.info(f"Websocket closed (status={close_status_code},msg={close_msg})")
+        for device in message["devices"]:
+            logger.info(f"Devices update receive for device {device['id']}")
 
-    def monitor(self):
+            for d in self._devices:
+                if d.id == device["id"]:
+                    d.update(device["features"])
+                    break
+
+    def _on_scan_progress(self, message: str):
+        """
+            '{"type": "scanProgress", "data": {"id": "fade256a-0d9c-4ca0-991c-c6b0673cf750", "progress": 9.375, "found": 0, "status": "addressing"}, "timeSignature": {"timestamp": 1668876581.5060523, "counter": 3721}}', extra='')
+
+        @param message: json string
+        @return:
+        """
+        self._scanner = message
+
+    async def monitor(self):
         """
         Start websocket listening thread
         Stores the ws in self._ws and the loop thead in self._scanner
         @return:
         """
         logger.debug(f"Subscribing to websocket ws://{self._host}")
-        logger.debug("Opening subscribe thread")
+
+        scheme = "ws"
+        if self._ssl:
+            scheme = "wss"
+
+        async with aiohttp.ClientSession() as session:
+            async with session.ws_connect(url=f"{scheme}://{self._host}") as ws:
+                async for message in ws:
+                    logger.debug(f"Message received: {message}")
+                    if message.type == aiohttp.WSMsgType.TEXT:
+                        print(message)
+
+        logger.debug("Monitoring stopped")
 
     async def get_devices(self):
         """
@@ -266,9 +395,10 @@ class DALI2IoT:
             if ok:
                 for device in response["devices"]:
                     if "switchable" in device["features"]:
-                        self._devices.append(DaliLight(**device))
+                        self._devices.append(DaliLight(self, **device))
                     else:
-                        self._devices.append(DaliDevice(**device))
+                        logger.info("Not a DaliLight - not supported")
+                        # self._devices.append(DaliDevice(**device))
         except aiohttp.ClientConnectorError as client_conn_err:
             self.error = f"Error while retrieving devices lists ({client_conn_err})"
 
@@ -315,3 +445,44 @@ class DALI2IoT:
         @return:
         """
         logger.debug("Bye")
+
+
+class DaliLight(DaliDevice):
+    """
+    Dali Light device
+    """
+
+    def __init__(
+        self,
+        gateway: DaliGateway,
+        id: int,
+        name: str,
+        info: str,
+        type: str,
+        features: object = None,
+        scenes: object = None,
+        groups: object = None,
+    ):
+
+        super().__init__(
+            id,
+            name,
+            info,
+            type,
+            features,
+            scenes,
+            groups,
+        )
+
+        self._gateway = gateway
+        self._type = DALI_DEVICE_LIGHT
+
+    @property
+    def is_on(self) -> bool:
+        return self.switchable
+
+    async def turn_on(self):
+        await self._gateway.turn_on(device=self)
+
+    async def turn_off(self):
+        await self._gateway.turn_off(device=self)
