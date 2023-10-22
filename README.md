@@ -1,5 +1,6 @@
 # dali-io-t-client
-A client library for accessing Dali IoT
+A client library for accessing Lunatone Dali 2 IoT Gateway https://www.lunatone.com/en/product/dali-2-iot-gateway/
+Code generated using https://github.com/openapi-generators/openapi-python-client
 
 ## Usage
 First, create a client:
