@@ -1,96 +1,124 @@
-# dali2iot
+# dali-io-t-client
+A client library for accessing Dali IoT
 
-Async python library to control your Lunatone DALi2IoT gateway
-Works with https://www.lunatone.com/en/product/dali-2-iot-gateway/ 
-
-## How it works
-
-The d2i object is using an internal FSM thanks to the "status" property. Each state is defined with a constant
-
-- `DALI_INIT = 0` : initial state
-- `DALI_CONNECTED = 1` : the gateway is a recognized as a supported DALI2IoT gateway
-- `DALI_SCANNING = 2` : BUS Scan in progress
-- `DALI_SCANNING_STOP = 3` : BUS scan stopped
-- `DALI_READY = 4` : BUS scan completed
-- `DALI_ERROR = -1` : An error has occured, see the `error` property to know more
-
-Note: scanning is mandatory only if a device is not found on the DALI BUS. The gateway will work in `DALI_CONNECTED` and `DALI_READY`state
-
-A running example can be found under the `example.py` file
-
-1. Validate the host is a recognized Dali2IoT gateway using static method
+## Usage
+First, create a client:
 
 ```python
-is_dali, ret = await dali2iot.DALI2IoT.is_dali(host=host)
+from dali_io_t_client import Client
+
+client = Client(base_url="https://api.example.com")
 ```
 
-2. If the gateway is supported, you can connect to it ()
-````python
-asyncio.run(d2i.connect())
-````
-
-3. Scan your DALI Bus if the devices have not been discovered yet
-```python
-asyncio.run(d2i.scan())
-```
-
-4. Retrieve the devices known by the gateway
-
-Note: if the device is newly added, it might not be known by the DALI BUS itself. Run a scan to have it discover and address
+If the endpoints you're going to hit require authentication, use `AuthenticatedClient` instead:
 
 ```python
-asyncio.run(d2i.get_devices())
+from dali_io_t_client import AuthenticatedClient
+
+client = AuthenticatedClient(base_url="https://api.example.com", token="SuperSecretToken")
 ```
 
-5. Start the monitoring thread
+Now call your endpoint and use your models:
 
 ```python
-d2i.monitor()
+from dali_io_t_client.models import MyDataModel
+from dali_io_t_client.api.my_tag import get_my_data_model
+from dali_io_t_client.types import Response
+
+with client as client:
+    my_data: MyDataModel = get_my_data_model.sync(client=client)
+    # or if you need more info (e.g. status_code)
+    response: Response[MyDataModel] = get_my_data_model.sync_detailed(client=client)
 ```
 
-The monitoring thread open a websocket to the gateway and listen to incoming messages.
-When a device state change is receive, the corresponding DaliDevice get their status updated to reflect the current state of the device
-
-#### Example 
-Below is a `devices` type message, indicating a change in the device status with the new device state
-```json
-{
-  "type": "devices",
-  "data": {
-  "devices": [
-    {
-      "id": 1,
-      "name": "Dali #0",
-      "address": 0,
-      "line": 0,
-      "type": "default",
-      "features": {
-        "switchable": {
-          "status": false
-        }
-      } ...
-    }, ...
-}
-```
-
-6. Toggle a device
+Or do the same thing with an async version:
 
 ```python
-device_id = int(input("Device id: "))
-device = next((d for d in d2i.devices if d.id == device_id), None)
-if device is not None:
-    if device.is_on:
-        asyncio.run(d2i.turn_off(device))
-    else:
-        asyncio.run(d2i.turn_on(device))
+from dali_io_t_client.models import MyDataModel
+from dali_io_t_client.api.my_tag import get_my_data_model
+from dali_io_t_client.types import Response
+
+async with client as client:
+    my_data: MyDataModel = await get_my_data_model.asyncio(client=client)
+    response: Response[MyDataModel] = await get_my_data_model.asyncio_detailed(client=client)
 ```
 
-## What's next?
+By default, when you're calling an HTTPS API it will attempt to verify that SSL is working correctly. Using certificate verification is highly recommended most of the time, but sometimes you may need to authenticate to a server (especially an internal server) using a custom certificate bundle.
 
-### Planned
+```python
+client = AuthenticatedClient(
+    base_url="https://internal_api.example.com", 
+    token="SuperSecretToken",
+    verify_ssl="/path/to/certificate_bundle.pem",
+)
+```
 
-- Scan progress update using websocket
+You can also disable certificate validation altogether, but beware that **this is a security risk**.
 
-### Unplanned
+```python
+client = AuthenticatedClient(
+    base_url="https://internal_api.example.com", 
+    token="SuperSecretToken", 
+    verify_ssl=False
+)
+```
 
-- SSL support
+Things to know:
+1. Every path/method combo becomes a Python module with four functions:
+    1. `sync`: Blocking request that returns parsed data (if successful) or `None`
+    1. `sync_detailed`: Blocking request that always returns a `Request`, optionally with `parsed` set if the request was successful.
+    1. `asyncio`: Like `sync` but async instead of blocking
+    1. `asyncio_detailed`: Like `sync_detailed` but async instead of blocking
+
+1. All path/query params, and bodies become method arguments.
+1. If your endpoint had any tags on it, the first tag will be used as a module name for the function (my_tag above)
+1. Any endpoint which did not have a tag will be in `dali_io_t_client.api.default`
+
+## Advanced customizations
+
+There are more settings on the generated `Client` class which let you control more runtime behavior, check out the docstring on that class for more info. You can also customize the underlying `httpx.Client` or `httpx.AsyncClient` (depending on your use-case):
+
+```python
+from dali_io_t_client import Client
+
+def log_request(request):
+    print(f"Request event hook: {request.method} {request.url} - Waiting for response")
+
+def log_response(response):
+    request = response.request
+    print(f"Response event hook: {request.method} {request.url} - Status {response.status_code}")
+
+client = Client(
+    base_url="https://api.example.com",
+    httpx_args={"event_hooks": {"request": [log_request], "response": [log_response]}},
+)
+
+# Or get the underlying httpx client to modify directly with client.get_httpx_client() or client.get_async_httpx_client()
+```
+
+You can even set the httpx client directly, but beware that this will override any existing settings (e.g., base_url):
+
+```python
+import httpx
+from dali_io_t_client import Client
+
+client = Client(
+    base_url="https://api.example.com",
+)
+# Note that base_url needs to be re-set, as would any shared cookies, headers, etc.
+client.set_httpx_client(httpx.Client(base_url="https://api.example.com", proxies="http://localhost:8030"))
+```
+
+## Building / publishing this package
+This project uses [Poetry](https://python-poetry.org/) to manage dependencies  and packaging.  Here are the basics:
+1. Update the metadata in pyproject.toml (e.g. authors, version)
+1. If you're using a private repository, configure it with Poetry
+    1. `poetry config repositories.<your-repository-name> <url-to-your-repository>`
+    1. `poetry config http-basic.<your-repository-name> <username> <password>`
+1. Publish the client with `poetry publish --build -r <your-repository-name>` or, if for public PyPI, just `poetry publish --build`
+
+If you want to install this client into another project without publishing it (e.g. for development) then:
+1. If that project **is using Poetry**, you can simply do `poetry add <path-to-this-client>` from that project
+1. If that project is not using Poetry:
+    1. Build a wheel with `poetry build -f wheel`
+    1. Install that wheel from the other project `pip install <path-to-wheel>`
